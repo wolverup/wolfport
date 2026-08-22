@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b0c10">
+<title>WOLFPORT — Live Portfolio</title>
+<meta name="description" content="Track your tokens live — amounts, cost, P&L — without opening a wallet.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0b0c10; --card: #14161d; --card2: #181b23; --line: #242834; --line2: #2e3342;
+    --text: #f2efe4; --muted: #93907f; --dim: #5d5c4d;
+    --acc: #ffe14d; --acc-soft: rgba(255,225,77,0.1); --acc-line: rgba(255,225,77,0.35);
+    --up: #34d399; --down: #f87171; --mag: #ff2ad4;
+    --ui: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui);
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(ellipse 70% 40% at 50% -5%, rgba(255,225,77,0.045), transparent 65%); }
+  ::selection { background: rgba(255,225,77,0.3); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ---- nav ---- */
+  nav { position: sticky; top: 0; z-index: 50; background: rgba(11,12,16,0.85);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .nav-in { max-width: 980px; margin: 0 auto; padding: 14px 20px; display: flex;
+    justify-content: space-between; align-items: center; }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .logo .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--acc);
+    box-shadow: 0 0 10px rgba(255,225,77,0.6); }
+  .logo b { font-weight: 800; font-size: 16px; letter-spacing: 1px; color: var(--text); }
+  .logo b span { color: var(--acc); }
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .live-pill { font-family: var(--mono); font-size: 11px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; display: flex;
+    align-items: center; gap: 7px; }
+  .live-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--up);
+    animation: pulse 2s ease infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  .btn { background: var(--acc); color: #171404; border: none; border-radius: 8px;
+    font-family: var(--ui); font-weight: 700; font-size: 12.5px; padding: 9px 16px;
+    cursor: pointer; transition: filter .15s, transform .1s; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: wait; }
+
+  /* ---- header ---- */
+  header.page { padding: 44px 0 8px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: 2px; margin-bottom: 8px; }
+  .crumb b { color: var(--acc); font-weight: 600; }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
+  h1 span { color: var(--muted); font-weight: 500; }
+
+  /* ---- KPI cards ---- */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+  .kpi.hero { background: linear-gradient(150deg, rgba(255,225,77,0.09), var(--card) 55%);
+    border-color: var(--acc-line); }
+  .kpi .k { font-size: 11px; letter-spacing: 1.8px; color: var(--muted); font-weight: 600; }
+  .kpi .v { font-family: var(--mono); font-weight: 700; font-size: 27px; margin-top: 8px; color: var(--text); }
+  .kpi.hero .v { font-size: 34px; color: var(--acc); }
+  .kpi .s { font-size: 12px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+  .up-t { color: var(--up) !important; } .down-t { color: var(--down) !important; }
+
+  /* ---- add panel ---- */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    margin-top: 22px; overflow: visible; }
+  .panel-h { padding: 16px 22px; border-bottom: 1px solid var(--line); display: flex;
+    justify-content: space-between; align-items: center; }
+  .panel-h .t { font-size: 13.5px; font-weight: 700; }
+  .panel-h .t span { color: var(--acc); margin-right: 8px; font-family: var(--mono); }
+  .panel-b { padding: 18px 22px 20px; }
+  .frow { display: grid; grid-template-columns: 2.2fr 1fr 1fr auto; gap: 10px; align-items: center; }
+  .sw { position: relative; }
+  input[type=text], input[type=number] { width: 100%; background: var(--bg); border: 1px solid var(--line2);
+    border-radius: 9px; color: var(--text); font-family: var(--mono); font-size: 13.5px;
+    padding: 11px 13px; transition: border-color .15s, box-shadow .15s; }
+  input::placeholder { color: var(--dim); font-family: var(--ui); font-weight: 400; }
+  input:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px rgba(255,225,77,0.12); }
+  .drop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+    background: var(--card2); border: 1px solid var(--line2); border-radius: 10px;
+    max-height: 264px; overflow-y: auto; display: none;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+  .drop.show { display: block; }
+  .sr { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer;
+    border-bottom: 1px solid var(--line); }
+  .sr:last-child { border-bottom: none; }
+  .sr:hover { background: var(--acc-soft); }
+  .sr img { width: 26px; height: 26px; border-radius: 50%; background: var(--line); }
+  .sr .sym { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--text); min-width: 62px; }
+  .sr .nm { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fhelp { font-size: 11.5px; color: var(--dim); margin-top: 12px; }
+
+  /* ---- holdings table ---- */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  thead th { text-align: right; font-size: 10.5px; letter-spacing: 1.6px; color: var(--dim);
+    font-weight: 600; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  thead th:first-child { text-align: left; padding-left: 22px; }
+  thead th:last-child { padding-right: 22px; }
+  tbody td { padding: 14px; text-align: right; font-family: var(--mono); font-size: 13px;
+    border-bottom: 1px solid var(--line); color: var(--text); }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: rgba(255,225,77,0.03); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.tok { text-align: left !important; padding-left: 22px !important; }
+  .tokcell { display: flex; align-items: center; gap: 12px; }
+  .tokcell img { width: 34px; height: 34px; border-radius: 50%; background: var(--line); }
+  .tokcell .s { font-weight: 700; font-size: 13.5px; font-family: var(--mono); }
+  .tokcell .n { font-size: 11.5px; color: var(--muted); font-family: var(--ui); margin-top: 1px; }
+  .sub { font-size: 11px; color: var(--muted); margin-top: 2px; display: block; }
+  .del { background: transparent; border: 1px solid var(--line2); color: var(--muted);
+    border-radius: 7px; width: 30px; height: 30px; cursor: pointer; font-size: 12px; transition: .15s; }
+  .del:hover { border-color: var(--down); color: var(--down); background: rgba(248,113,113,0.08); }
+  .ed { margin-right: 6px; }
+  .ed:hover { border-color: var(--acc); color: var(--acc); background: var(--acc-soft); }
+  .edit-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 0; }
+  .edit-form input { width: 150px; padding: 9px 11px; font-size: 13px; }
+  .edit-form .lbl { font-size: 10.5px; letter-spacing: 1.5px; color: var(--dim); font-weight: 600; }
+  .mini { background: var(--acc); color: #171404; border: none; border-radius: 7px;
+    font-family: var(--ui); font-weight: 700; font-size: 12px; padding: 9px 16px; cursor: pointer; }
+  .mini:hover { filter: brightness(1.08); }
+  .mini.ghost { background: transparent; border: 1px solid var(--line2); color: var(--muted); }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 13.5px; line-height: 2; }
+  .empty .big { font-size: 32px; margin-bottom: 10px; }
+
+  footer { text-align: center; padding: 34px 16px 44px; color: var(--dim); font-size: 11px;
+    letter-spacing: 1px; border-top: 1px solid var(--line); margin-top: 48px; line-height: 2; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; z-index: 210; background: var(--card2);
+    border: 1px solid var(--acc-line); color: var(--text); padding: 13px 18px; border-radius: 10px;
+    font-size: 13px; font-family: var(--ui); box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    transform: translateY(120px); opacity: 0; transition: .3s; max-width: 320px; }
+  .toast.show { transform: none; opacity: 1; }
+
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: 1fr; }
+    .frow { grid-template-columns: 1fr 1fr; }
+    .frow .btn { grid-column: span 2; padding: 12px; }
+    .live-pill { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="nav-in">
+  <a class="logo" href="#"><span class="dot"></span><b>WOLF<span>PORT</span></b></a>
+  <div class="nav-right">
+    <span class="live-pill"><i></i><span id="tick">live</span></span>
+    <button class="btn" id="refreshBtn" onclick="refresh(true)">Refresh</button>
+  </div>
+</div></nav>
+
+<div class="wrap">
+
+  <header class="page">
+    <div class="crumb">// <b>PORTFOLIO</b> — LIVE, NO WALLET CONNECTED</div>
+    <h1>Overview <span>· your tokens, ticking in real time</span></h1>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi hero">
+      <div class="k">TOTAL VALUE</div>
+      <div class="v" id="totalVal">$0.00</div>
+      <div class="s" id="heroSub">add your first token below</div>
+    </div>
+    <div class="kpi">
+      <div class="k">TOTAL COST</div>
+      <div class="v" id="tCost">—</div>
+      <div class="s" id="tCount">0 tokens</div>
+    </div>
+    <div class="kpi">
+      <div class="k">PROFIT / LOSS</div>
+      <div class="v" id="tPnl">—</div>
+      <div class="s" id="tPnlPct">&nbsp;</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><div class="t"><span>+</span>Add holding</div></div>
+    <div class="panel-b">
+      <div class="frow">
+        <div class="sw">
+          <input id="q" type="text" placeholder="Search token — btc, eth, grass…" autocomplete="off">
+          <div class="drop" id="drop"></div>
+        </div>
+        <input id="amt" type="number" step="any" placeholder="Amount" autocomplete="off">
+        <input id="cost" type="number" step="any" placeholder="Buy price $ (opt.)" autocomplete="off">
+        <button class="btn" onclick="addHolding()">Add</button>
+      </div>
+      <div class="fhelp">Buy price is optional — without it you still see live value; with it you get full profit &amp; loss. Saved in this browser only.</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><div class="t"><span>≡</span>Holdings</div><div class="t" style="color:var(--muted);font-weight:500" id="tick2">prices: CoinGecko</div></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>TOKEN</th><th>PRICE</th><th>24H</th><th>HOLDING</th><th>VALUE</th><th>P&amp;L</th><th></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none">
+        <div class="big">🐺</div>
+        No tokens yet.<br>
+        Search a token, enter your amount and what you paid —<br>
+        then watch it live without ever opening a wallet.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    WOLFPORT · free · keyless · runs 100% in your browser — prices indicative, confirm trades on your exchange
+  </footer>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ============ WOLFPORT — live token portfolio (SaaS skin) ============
+const LS_KEY = 'wolfport_v1';
+let holdings = [];
+let prices = {};
+let selected = null;
+let editingId = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtUsd = n => {
+  if (n == null || isNaN(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  n = Math.abs(n);
+  if (n >= 1e9) return sign + '$' + (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return sign + '$' + (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return sign + '$' + (n/1e3).toFixed(1) + 'K';
+  return sign + '$' + n.toFixed(2);
+};
+const fmtP = n => n == null || isNaN(n) ? '—'
+  : (n < 0.01 && n > 0 ? '$' + n.toPrecision(3)
+  : '$' + n.toLocaleString('en-US', {maximumFractionDigits: n < 10 ? 4 : 2}));
+
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(holdings)); }
+function load() {
+  try { holdings = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { holdings = []; }
+  if (!Array.isArray(holdings)) holdings = [];
+}
+
+// ---------- search ----------
+let searchT = null;
+$('q').addEventListener('input', () => {
+  clearTimeout(searchT);
+  selected = null;
+  const q = $('q').value.trim();
+  if (q.length < 2) { $('drop').classList.remove('show'); return; }
+  searchT = setTimeout(() => doSearch(q), 450);
+});
+async function doSearch(q) {
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(q));
+    const d = await r.json();
+    const coins = (d.coins || []).slice(0, 8);
+    const drop = $('drop');
+    if (!coins.length) { drop.classList.remove('show'); return; }
+    drop.innerHTML = coins.map(c =>
+      '<div class="sr" onclick="pickCoin(\'' + esc(c.id) + '\')">' +
+      '<img src="' + esc(c.thumb || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+      '<span class="sym">' + esc(c.symbol) + '</span><span class="nm">' + esc(c.name) + '</span></div>'
+    ).join('');
+    drop.classList.add('show');
+  } catch (e) { /* rate limit — silent */ }
+}
+function pickCoin(id) {
+  const row = Array.from($('drop').children).find(r => (r.getAttribute('onclick')||'').includes("'" + id + "'"));
+  if (!row) return;
+  const sym = row.querySelector('.sym').textContent;
+  const nm = row.querySelector('.nm').textContent;
+  const img = row.querySelector('img');
+  selected = { id, symbol: sym.toUpperCase(), name: nm, thumb: img && img.src || '' };
+  $('q').value = sym.toUpperCase() + ' — ' + nm;
+  $('drop').classList.remove('show');
+  $('amt').focus();
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sw')) $('drop').classList.remove('show');
+});
+
+// ---------- add / delete ----------
+function addHolding() {
+  if (!selected) { showToast('Search and pick a token first'); return; }
+  const amount = parseFloat($('amt').value);
+  if (!amount || amount <= 0 || isNaN(amount)) { showToast('Enter a valid amount'); return; }
+  const buy = parseFloat($('cost').value);
+  const buyPrice = (!isNaN(buy) && buy > 0) ? buy : null;
+  if (holdings.some(h => h.id === selected.id)) {
+    showToast(selected.symbol + ' is already in your portfolio — remove it first to change');
+    return;
+  }
+  holdings.push({...selected, amount, buyPrice});
+  save();
+  $('q').value = ''; $('amt').value = ''; $('cost').value = '';
+  showToast(selected.symbol + ' added — fetching live price…');
+  selected = null;
+  refresh(true);
+}
+function delHolding(id) {
+  holdings = holdings.filter(h => h.id !== id);
+  if (editingId === id) editingId = null;
+  save();
+  refresh(false);
+}
+
+// ---------- prices ----------
+async function refreshPrices() {
+  if (!holdings.length) { prices = {}; return; }
+  const ids = holdings.map(h => h.id).join(',');
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + ids +
+      '&vs_currencies=usd&include_24hr_change=true');
+    const d = await r.json();
+    Object.keys(prices).forEach(k => delete prices[k]);
+    Object.assign(prices, d);
+    $('tick').textContent = 'updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  } catch (e) {
+    $('tick').textContent = 'retrying…';
+  }
+}
+async function refresh(manual) {
+  const btn = $('refreshBtn');
+  btn.disabled = true; btn.textContent = '…';
+  await refreshPrices();
+  render();
+  btn.disabled = false; btn.textContent = 'Refresh';
+  if (manual) showToast('Prices updated');
+}
+
+// ---------- edit ----------
+function editHolding(id) {
+  editingId = id;
+  render();
+  const inp = document.querySelector('.edit-form input');
+  if (inp) inp.focus();
+}
+function cancelEdit() {
+  editingId = null;
+  render();
+}
+function saveEdit(id) {
+  const h = holdings.find(x => x.id === id);
+  if (!h) { editingId = null; return; }
+  const amount = parseFloat(document.getElementById('ed-amt').value);
+  const buy = parseFloat(document.getElementById('ed-cost').value);
+  if (!amount || amount <= 0 || isNaN(amount)) { showToast('Enter a valid amount'); return; }
+  h.amount = amount;
+  h.buyPrice = (!isNaN(buy) && buy > 0) ? buy : null;
+  save();
+  editingId = null;
+  showToast(h.symbol + ' updated ✓');
+  refresh(false);
+}
+
+// ---------- render ----------
+function render() {
+  const rows = $('rows');
+  const empty = $('empty');
+  if (!holdings.length) {
+    rows.innerHTML = '';
+    empty.style.display = 'block';
+    $('totalVal').textContent = '$0.00';
+    $('heroSub').textContent = 'add your first token below';
+    $('tCost').textContent = '—'; $('tPnl').textContent = '—';
+    $('tCount').textContent = '0 tokens'; $('tPnlPct').innerHTML = '&nbsp;';
+    return;
+  }
+  empty.style.display = 'none';
+  let html = '', tVal = 0, tCost = 0, hasCost = false;
+  holdings.forEach(h => {
+    const p = prices[h.id] || {};
+    const price = p.usd, ch = p.usd_24h_change;
+    const val = (price != null) ? price * h.amount : null;
+    if (val != null) tVal += val;
+    const cost = h.buyPrice != null ? h.buyPrice * h.amount : null;
+    if (cost != null) { tCost += cost; hasCost = true; }
+    let pnlHtml = '<span style="color:var(--dim)">—</span>';
+    if (val != null && cost != null && cost > 0) {
+      const pnl = val - cost, pct = (val / cost - 1) * 100, cls = pnl >= 0 ? 'up-t' : 'down-t';
+      pnlHtml = '<span class="' + cls + '">' + (pnl >= 0 ? '+' : '') + fmtUsd(pnl) +
+        '<span class="sub ' + cls + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%</span></span>';
+    } else if (val != null) {
+      pnlHtml = '<span style="color:var(--dim);font-size:11.5px">no cost set</span>';
+    }
+    if (h.id === editingId) {
+      html += '<tr><td colspan="7" class="tok"><div class="edit-form">' +
+        '<span class="lbl">EDIT ' + esc(h.symbol) + '</span>' +
+        '<input id="ed-amt" type="number" step="any" value="' + h.amount + '" placeholder="amount">' +
+        '<span class="lbl">BUY $</span>' +
+        '<input id="ed-cost" type="number" step="any" value="' + (h.buyPrice != null ? h.buyPrice : '') + '" placeholder="optional">' +
+        '<button class="mini" onclick="saveEdit(\'' + esc(h.id) + '\')">Save</button>' +
+        '<button class="mini ghost" onclick="cancelEdit()">Cancel</button>' +
+      '</div></td></tr>';
+      return;
+    }
+    html += '<tr>' +
+      '<td class="tok"><div class="tokcell">' +
+        '<img src="' + esc(h.thumb || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+        '<div><div class="s">' + esc(h.symbol) + '</div><div class="n">' + esc(h.name) + '</div></div>' +
+      '</div></td>' +
+      '<td>' + fmtP(price) + '</td>' +
+      '<td>' + (ch != null ? '<span class="' + (ch >= 0 ? 'up-t' : 'down-t') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(1) + '%</span>' : '—') + '</td>' +
+      '<td>' + h.amount.toLocaleString('en-US', {maximumFractionDigits: 8}) + '</td>' +
+      '<td>' + (val != null ? fmtUsd(val) : '<span style="color:var(--dim)">…</span>') + '</td>' +
+      '<td>' + pnlHtml + '</td>' +
+      '<td><div style="display:flex;justify-content:flex-end"><button class="del ed" title="edit" onclick="editHolding(\'' + esc(h.id) + '\')">✎</button>' +
+      '<button class="del" title="remove" onclick="delHolding(\'' + esc(h.id) + '\')">✕</button></div></td>' +
+    '</tr>';
+  });
+  rows.innerHTML = html;
+
+  $('totalVal').textContent = fmtUsd(tVal);
+  $('tCount').textContent = holdings.length + (holdings.length === 1 ? ' token' : ' tokens');
+  if (hasCost && tCost > 0) {
+    const pnl = tVal - tCost, pct = (tVal / tCost - 1) * 100, cls = pnl >= 0 ? 'up-t' : 'down-t';
+    $('tCost').textContent = fmtUsd(tCost);
+    $('tPnl').innerHTML = '<span class="' + cls + '">' + (pnl >= 0 ? '+' : '') + fmtUsd(pnl) + '</span>';
+    $('tPnlPct').innerHTML = '<span class="' + cls + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% all time</span>';
+    $('heroSub').innerHTML = 'cost ' + fmtUsd(tCost) + ' · <span class="' + cls + '">' +
+      (pnl >= 0 ? '+' : '') + fmtUsd(pnl) + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)</span>';
+  } else {
+    $('tCost').textContent = '—';
+    $('tPnl').textContent = '—';
+    $('tPnlPct').innerHTML = '<span style="color:var(--dim)">set buy prices to track P&amp;L</span>';
+    $('heroSub').textContent = holdings.length + ' tokens tracked live';
+  }
+}
+
+// ---------- boot ----------
+load();
+render();
+refresh(false);
+setInterval(() => refresh(false), 60000);
+</script>
+</body>
+</html>
