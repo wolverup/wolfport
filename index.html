@@ -57,6 +57,15 @@
   h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
   h1 span { color: var(--muted); font-weight: 500; }
 
+  /* ---- giant scoreboard ---- */
+  .score { text-align: center; padding: 36px 10px 10px; }
+  .score .k { font-size: 11px; letter-spacing: 3px; color: var(--muted); font-weight: 600; }
+  .score .v { font-family: var(--mono); font-weight: 700; line-height: 1.02;
+    font-size: clamp(58px, 13vw, 148px); color: var(--acc); margin-top: 8px;
+    text-shadow: 0 0 44px rgba(255,225,77,0.35); letter-spacing: -2px; }
+  .score .s { font-size: 13px; color: var(--muted); margin-top: 8px; font-family: var(--mono); }
+  .score .s .up-t { font-weight: 700; } .score .s .down-t { font-weight: 700; }
+
   /* ---- KPI cards ---- */
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 24px; }
   .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
@@ -76,7 +85,7 @@
   .panel-h .t { font-size: 13.5px; font-weight: 700; }
   .panel-h .t span { color: var(--acc); margin-right: 8px; font-family: var(--mono); }
   .panel-b { padding: 18px 22px 20px; }
-  .frow { display: grid; grid-template-columns: 2.2fr 1fr 1fr auto; gap: 10px; align-items: center; }
+  .frow { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1fr auto; gap: 10px; align-items: center; }
   .sw { position: relative; }
   input[type=text], input[type=number] { width: 100%; background: var(--bg); border: 1px solid var(--line2);
     border-radius: 9px; color: var(--text); font-family: var(--mono); font-size: 13.5px;
@@ -95,6 +104,12 @@
   .sr img { width: 26px; height: 26px; border-radius: 50%; background: var(--line); }
   .sr .sym { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--text); min-width: 62px; }
   .sr .nm { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .amt-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .amt-toggle { display: flex; gap: 4px; }
+  .amt-toggle button { flex: 1; background: transparent; border: 1px solid var(--line2);
+    border-radius: 7px; color: var(--dim); font-family: var(--ui); font-weight: 600;
+    font-size: 10px; letter-spacing: 1.5px; padding: 5px 0; cursor: pointer; transition: .15s; }
+  .amt-toggle button.on { background: var(--acc-soft); border-color: var(--acc-line); color: var(--acc); }
   .fhelp { font-size: 11.5px; color: var(--dim); margin-top: 12px; }
 
   /* ---- holdings table ---- */
@@ -165,12 +180,13 @@
     <h1>Overview <span>· your tokens, ticking in real time</span></h1>
   </header>
 
+  <section class="score">
+    <div class="k">TOTAL VALUE</div>
+    <div class="v" id="totalVal">$0.00</div>
+    <div class="s" id="heroSub">add your first token below</div>
+  </section>
+
   <section class="kpis">
-    <div class="kpi hero">
-      <div class="k">TOTAL VALUE</div>
-      <div class="v" id="totalVal">$0.00</div>
-      <div class="s" id="heroSub">add your first token below</div>
-    </div>
     <div class="kpi">
       <div class="k">TOTAL COST</div>
       <div class="v" id="tCost">—</div>
@@ -180,6 +196,11 @@
       <div class="k">PROFIT / LOSS</div>
       <div class="v" id="tPnl">—</div>
       <div class="s" id="tPnlPct">&nbsp;</div>
+    </div>
+    <div class="kpi hero">
+      <div class="k">24H MOVE</div>
+      <div class="v" id="t24h">—</div>
+      <div class="s">portfolio, live</div>
     </div>
   </section>
 
@@ -191,11 +212,18 @@
           <input id="q" type="text" placeholder="Search token — btc, eth, grass…" autocomplete="off">
           <div class="drop" id="drop"></div>
         </div>
-        <input id="amt" type="number" step="any" placeholder="Amount" autocomplete="off">
-        <input id="cost" type="number" step="any" placeholder="Buy price $ (opt.)" autocomplete="off">
+        <div class="amt-wrap">
+          <div class="amt-toggle">
+            <button type="button" id="modeToken" class="on" onclick="setAmtMode('token')">TOKEN</button>
+            <button type="button" id="modeUsd" onclick="setAmtMode('usd')">USD $</button>
+          </div>
+          <input id="amt" type="number" step="any" placeholder="Amount" autocomplete="off">
+        </div>
+        <input id="cost" type="number" step="any" placeholder="USD spent (opt.)" autocomplete="off">
+        <input id="price" type="number" step="any" placeholder="Buy price $ (opt.)" autocomplete="off">
         <button class="btn" onclick="addHolding()">Add</button>
       </div>
-      <div class="fhelp">Buy price is optional — without it you still see live value; with it you get full profit &amp; loss. Saved in this browser only.</div>
+      <div class="fhelp">Cost basis your way: fill <b>USD spent</b> OR <b>buy price</b> — whichever you know. USD wins if both are filled. Leave both empty for value-only tracking.</div>
     </div>
   </section>
 
@@ -233,6 +261,14 @@ let holdings = [];
 let prices = {};
 let selected = null;
 let editingId = null;
+let amtMode = localStorage.getItem('wolfport_amtmode') || 'token';
+function setAmtMode(m) {
+  amtMode = m;
+  localStorage.setItem('wolfport_amtmode', m);
+  $('modeToken').classList.toggle('on', m === 'token');
+  $('modeUsd').classList.toggle('on', m === 'usd');
+  $('amt').placeholder = m === 'usd' ? '$ you hold — converted live' : 'Amount';
+}
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -257,6 +293,8 @@ function showToast(msg) {
   t._h = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+const costOf = h => h.usdSpent != null ? h.usdSpent
+  : (h.buyPrice != null ? h.buyPrice * h.amount : null); // legacy price data
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(holdings)); }
 function load() {
   try { holdings = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { holdings = []; }
@@ -303,19 +341,37 @@ document.addEventListener('click', e => {
 });
 
 // ---------- add / delete ----------
-function addHolding() {
+async function addHolding() {
   if (!selected) { showToast('Search and pick a token first'); return; }
-  const amount = parseFloat($('amt').value);
-  if (!amount || amount <= 0 || isNaN(amount)) { showToast('Enter a valid amount'); return; }
-  const buy = parseFloat($('cost').value);
-  const buyPrice = (!isNaN(buy) && buy > 0) ? buy : null;
+  let amount = parseFloat($('amt').value);
+  if (!amount || amount <= 0 || isNaN(amount)) { showToast(amtMode === 'usd' ? 'Enter the dollar value you hold' : 'Enter a valid amount'); return; }
+  if (amtMode === 'usd') {
+    // user thinks in dollars: convert to token amount at the live price
+    let price = (prices[selected.id] || {}).usd;
+    if (price == null) {
+      try {
+        const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + selected.id + '&vs_currencies=usd');
+        const d = await r.json();
+        price = (d[selected.id] || {}).usd;
+      } catch (e) {}
+    }
+    if (!price) { showToast('No live price for ' + selected.symbol + ' yet — try again in a second'); return; }
+    const usdIn = amount;
+    amount = usdIn / price;
+    showToast(usdIn.toLocaleString('en-US', {style:'currency',currency:'USD',maximumFractionDigits:0}) +
+      ' → ' + amount.toLocaleString('en-US',{maximumFractionDigits:6}) + ' ' + selected.symbol + ' @ $' + price.toLocaleString('en-US',{maximumFractionDigits:6}));
+  }
+  const usd = parseFloat($('cost').value);
+  const prc = parseFloat($('price').value);
+  const usdSpent = (!isNaN(usd) && usd > 0) ? usd : null;
+  const buyPrice = (usdSpent == null && !isNaN(prc) && prc > 0) ? prc : null;
   if (holdings.some(h => h.id === selected.id)) {
     showToast(selected.symbol + ' is already in your portfolio — remove it first to change');
     return;
   }
-  holdings.push({...selected, amount, buyPrice});
+  holdings.push({...selected, amount, usdSpent, buyPrice});
   save();
-  $('q').value = ''; $('amt').value = ''; $('cost').value = '';
+  $('q').value = ''; $('amt').value = ''; $('cost').value = ''; $('price').value = '';
   showToast(selected.symbol + ' added — fetching live price…');
   selected = null;
   refresh(true);
@@ -368,8 +424,11 @@ function saveEdit(id) {
   const amount = parseFloat(document.getElementById('ed-amt').value);
   const buy = parseFloat(document.getElementById('ed-cost').value);
   if (!amount || amount <= 0 || isNaN(amount)) { showToast('Enter a valid amount'); return; }
+  const prc2 = parseFloat(document.getElementById('ed-price').value);
   h.amount = amount;
-  h.buyPrice = (!isNaN(buy) && buy > 0) ? buy : null;
+  if (!isNaN(buy) && buy > 0) { h.usdSpent = buy; h.buyPrice = null; }
+  else if (!isNaN(prc2) && prc2 > 0) { h.buyPrice = prc2; h.usdSpent = null; }
+  else { h.usdSpent = null; h.buyPrice = null; }
   save();
   editingId = null;
   showToast(h.symbol + ' updated ✓');
@@ -396,7 +455,7 @@ function render() {
     const price = p.usd, ch = p.usd_24h_change;
     const val = (price != null) ? price * h.amount : null;
     if (val != null) tVal += val;
-    const cost = h.buyPrice != null ? h.buyPrice * h.amount : null;
+    const cost = costOf(h);
     if (cost != null) { tCost += cost; hasCost = true; }
     let pnlHtml = '<span style="color:var(--dim)">—</span>';
     if (val != null && cost != null && cost > 0) {
@@ -410,8 +469,10 @@ function render() {
       html += '<tr><td colspan="7" class="tok"><div class="edit-form">' +
         '<span class="lbl">EDIT ' + esc(h.symbol) + '</span>' +
         '<input id="ed-amt" type="number" step="any" value="' + h.amount + '" placeholder="amount">' +
+        '<span class="lbl">USD SPENT</span>' +
+        '<input id="ed-cost" type="number" step="any" value="' + (h.usdSpent != null ? h.usdSpent : '') + '" placeholder="optional">' +
         '<span class="lbl">BUY $</span>' +
-        '<input id="ed-cost" type="number" step="any" value="' + (h.buyPrice != null ? h.buyPrice : '') + '" placeholder="optional">' +
+        '<input id="ed-price" type="number" step="any" value="' + (h.buyPrice != null ? h.buyPrice : '') + '" placeholder="optional">' +
         '<button class="mini" onclick="saveEdit(\'' + esc(h.id) + '\')">Save</button>' +
         '<button class="mini ghost" onclick="cancelEdit()">Cancel</button>' +
       '</div></td></tr>';
@@ -435,6 +496,20 @@ function render() {
 
   $('totalVal').textContent = fmtUsd(tVal);
   $('tCount').textContent = holdings.length + (holdings.length === 1 ? ' token' : ' tokens');
+  // portfolio-weighted 24h move
+  if (tVal > 0) {
+    let w = 0;
+    holdings.forEach(h => {
+      const p = prices[h.id] || {};
+      if (p.usd != null && p.usd_24h_change != null) {
+        const v = p.usd * h.amount;
+        w += v * p.usd_24h_change;
+      }
+    });
+    const move = w / tVal;
+    const cls = move >= 0 ? 'up-t' : 'down-t';
+    $('t24h').innerHTML = '<span class="' + cls + '">' + (move >= 0 ? '+' : '') + move.toFixed(2) + '%</span>';
+  } else $('t24h').textContent = '—';
   if (hasCost && tCost > 0) {
     const pnl = tVal - tCost, pct = (tVal / tCost - 1) * 100, cls = pnl >= 0 ? 'up-t' : 'down-t';
     $('tCost').textContent = fmtUsd(tCost);
@@ -452,6 +527,7 @@ function render() {
 
 // ---------- boot ----------
 load();
+setAmtMode(amtMode); // restore saved TOKEN/USD preference
 render();
 refresh(false);
 setInterval(() => refresh(false), 60000);
