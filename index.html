@@ -355,6 +355,12 @@ async function addHolding() {
         price = (d[selected.id] || {}).usd;
       } catch (e) {}
     }
+    if (price == null) {
+      try { // Binance fallback: SYMBOL+USDT
+        const r2 = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=' + selected.symbol.toUpperCase() + 'USDT');
+        if (r2.ok) { const d2 = await r2.json(); price = parseFloat(d2.price); }
+      } catch (e) {}
+    }
     if (!price) { showToast('No live price for ' + selected.symbol + ' yet — try again in a second'); return; }
     const usdIn = amount;
     amount = usdIn / price;
@@ -387,16 +393,41 @@ function delHolding(id) {
 async function refreshPrices() {
   if (!holdings.length) { prices = {}; return; }
   const ids = holdings.map(h => h.id).join(',');
+  let got = false, src = 'coingecko';
+  // 1) CoinGecko simple/price (works from most home IPs)
   try {
     const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + ids +
       '&vs_currencies=usd&include_24hr_change=true');
-    const d = await r.json();
-    Object.keys(prices).forEach(k => delete prices[k]);
-    Object.assign(prices, d);
-    $('tick').textContent = 'updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  } catch (e) {
-    $('tick').textContent = 'retrying…';
+    if (r.ok) {
+      const d = await r.json();
+      Object.keys(prices).forEach(k => delete prices[k]);
+      Object.assign(prices, d);
+      got = Object.keys(d).length > 0;
+    }
+  } catch (e) {}
+  // 2) Fallback: Binance public tickers (keyless, CORS-open) via SYMBOL+USDT
+  if (!got) {
+    src = 'binance';
+    try {
+      const syms = [...new Set(holdings.map(h => (h.symbol || '').toUpperCase() + 'USDT'))];
+      const url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(syms));
+      const r2 = await fetch(url);
+      if (r2.ok) {
+        const arr = await r2.json();
+        const bySym = {};
+        arr.forEach(t => bySym[t.symbol] = t);
+        Object.keys(prices).forEach(k => delete prices[k]);
+        holdings.forEach(h => {
+          const t = bySym[(h.symbol || '').toUpperCase() + 'USDT'];
+          if (t) prices[h.id] = { usd: parseFloat(t.lastPrice), usd_24h_change: parseFloat(t.priceChangePercent) };
+        });
+        got = Object.keys(prices).length > 0;
+      }
+    } catch (e) {}
   }
+  $('tick').textContent = got
+    ? 'live · ' + src + ' · ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})
+    : 'price fetch failed — retrying on next cycle';
 }
 async function refresh(manual) {
   const btn = $('refreshBtn');
